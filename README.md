@@ -81,3 +81,38 @@ npm run dev
 
 领域：数据工程
 子方向：数据采集、爬虫与RPA
+
+## 历史文件回归准备（sample_store / page_parser 联动）
+
+页面样本库顶部提供「从历史文件准备回归」工作台，覆盖：
+
+1. **选择历史页面文件 / 上传回归材料**：可下拉选择自带站点与批次的演练文件，
+   也可上传 JSON / JSONL / CSV / TSV / 键值文本 / HTML 表格（或直接粘贴内容）。
+2. **导入回执（逐行校验 + 后续动作）**：每行给出 `已验证 / 跨站拒绝 / 损坏 / 重复来源 / 无法解析`
+   结论、行内原因与后续动作。样本必须属于指定站点；**跨站同指纹只拒绝、绝不覆盖原样本**；
+   半份 HTML 判为损坏，不会成为已验证样本。
+3. **重试原导入**：回执号即“原导入请求号”，重传同一页按 `(导入请求, 页面编号)` 对账，
+   同一页始终只有一份合格来源，价格更正（如 70 → 79）走更新并保留轨迹。
+4. **同批模板试跑**：从同一批启动，或在「页面解析模板」页「领取回归样本」，
+   用模板选择器 + 通用策略从真实 HTML 提取价格/标题/币种，生成回归批次与
+   下载凭据（`credential`，支持 `?credential=&token=&key=`），可下载 CSV/JSON 试跑回执。
+5. **互相关联**：回执号 ↔ `sample_store` 样本 ID ↔ 试跑批次号在 UI 与下载文件中双向可见。
+   试跑窗口保持开启时，原导入的更正会自动跟进到同一回归批次；损坏页未补齐前状态为「等待补传」。
+
+演练数据：站点 `云街甄选`、批次 `RG-20261126-I1I2`，历史文件
+`HF-SCENARIO-70`（I1=70、I2 半传、跨站同指纹行）与 `HF-SCENARIO-79`（I1 更正为 79）。
+
+主要接口（同时挂在 `/api/regression/*` 与 `/api/sample_store/*`、`/api/page_parser/regression/*` 别名下）：
+
+```text
+GET  /api/regression/history-files
+POST /api/regression/imports                 # JSON / multipart / form / 原始文件体
+GET  /api/regression/imports/{import_no}
+POST /api/regression/imports/{import_no}/retry
+POST /api/regression/trials
+GET  /api/regression/trials/{trial_no}
+POST /api/regression/trials/{trial_no}/refresh
+POST /api/regression/trials/{trial_no}/reaccept
+GET  /api/regression/trials/{trial_no}/receipt?credential=...&format=csv|json
+POST /api/page_parser/regression/claim
+```

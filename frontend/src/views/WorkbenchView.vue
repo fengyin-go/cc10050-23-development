@@ -6,6 +6,15 @@
         <p class="page-desc">{{ meta.desc }}</p>
       </div>
       <div class="page-actions">
+        <button
+          v-if="meta.key === 'sample_store'"
+          class="btn"
+          data-testid="open-regression"
+          type="button"
+          @click="scrollToRegression"
+        >
+          从历史文件准备回归
+        </button>
         <button class="btn primary" data-testid="open-create" type="button" @click="openCreate">
           登记{{ meta.entity }}
         </button>
@@ -14,6 +23,9 @@
         </button>
       </div>
     </header>
+
+    <RegressionPanel v-if="meta.key === 'sample_store'" @changed="reload" />
+    <ParserClaimPanel v-if="meta.key === 'page_parser'" />
 
     <div class="stat-row">
       <article v-for="item in stats" :key="item.label" class="stat-card">
@@ -42,6 +54,7 @@
         <tr>
           <th v-for="column in meta.fields" :key="column">{{ column }}</th>
           <th>当前状态</th>
+          <th v-if="hasLinkColumn">回归关联</th>
           <th>可执行动作</th>
         </tr>
       </thead>
@@ -49,7 +62,39 @@
         <tr v-for="row in rows" :key="String(row.id)" :data-testid="`row-${row.id}`" :data-status="String(row.status)">
           <td v-for="column in meta.fields" :key="column">{{ row[column] ?? '—' }}</td>
           <td>{{ row.status }}</td>
+          <td v-if="hasLinkColumn" class="link-cell" data-testid="row-linkage">
+            <template v-if="meta.key === 'sample_store'">
+              <span v-if="row['来源导入回执']" class="mono small" :data-testid="`row-receipt-${row.id}`">
+                回执 {{ row['来源导入回执'] }}
+              </span>
+              <span v-else class="muted">—</span>
+              <span v-if="row['最近试跑批次']" class="mono small">｜试跑 {{ row['最近试跑批次'] }}</span>
+            </template>
+            <template v-else-if="meta.key === 'page_parser'">
+              <button class="link" type="button" :data-testid="`claim-row-${row.id}`" @click="claimFromRow(row)">
+                领取该模板回归样本
+              </button>
+            </template>
+          </td>
           <td class="row-actions">
+            <button
+              v-if="meta.key === 'sample_store' && row['来源导入回执']"
+              class="link"
+              type="button"
+              :data-testid="`receipt-row-${row.id}`"
+              @click="openReceipt(row)"
+            >
+              查看导入回执
+            </button>
+            <button
+              v-if="meta.key === 'page_parser'"
+              class="link"
+              type="button"
+              :data-testid="`claim-action-${row.id}`"
+              @click="claimFromRow(row)"
+            >
+              领取回归样本
+            </button>
             <button
               v-for="action in meta.actions"
               :key="action"
@@ -63,7 +108,7 @@
           </td>
         </tr>
         <tr v-if="!rows.length">
-          <td :colspan="meta.fields.length + 2" class="empty-state">
+          <td :colspan="meta.fields.length + 2 + (hasLinkColumn ? 1 : 0)" class="empty-state">
             暂无{{ meta.name }}数据，可先登记{{ meta.entity }}
           </td>
         </tr>
@@ -104,9 +149,12 @@ import {
   runAction as applyAction,
 } from '@/api/backend-service'
 import type { EntryRow } from '@/data/types'
+import ParserClaimPanel from '@/components/ParserClaimPanel.vue'
+import RegressionPanel from '@/components/RegressionPanel.vue'
 
 const props = defineProps<{ moduleKey: string }>()
 const meta = moduleMeta(props.moduleKey)
+const hasLinkColumn = computed(() => meta.key === 'sample_store' || meta.key === 'page_parser')
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
@@ -148,6 +196,29 @@ function openCreate() {
   createValues.value = Object.fromEntries(meta.fields.map((field) => [field, '']))
   errorMessage.value = ''
   showCreate.value = true
+}
+
+function scrollToRegression() {
+  document.querySelector('[data-testid="regression-panel"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function openReceipt(row: EntryRow) {
+  const importNo = String(row['来源导入回执'] ?? '')
+  if (importNo) {
+    sessionStorage.setItem('regression.importNo', importNo)
+    window.dispatchEvent(new CustomEvent('regression:open-receipt', { detail: { importNo } }))
+  }
+  scrollToRegression()
+}
+
+function claimFromRow(row: EntryRow) {
+  const batch = String(row['样本批次'] ?? '')
+  window.dispatchEvent(
+    new CustomEvent('parser:claim-template', {
+      detail: { templateId: Number(row.id), batch: batch.includes('样例') ? '' : batch },
+    }),
+  )
+  document.querySelector('[data-testid="parser-claim-panel"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 async function submitCreate() {

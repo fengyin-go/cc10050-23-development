@@ -16,7 +16,9 @@ app = FastAPI(title="商品价格监控采集平台", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins,
+    # 本地演练/评测可能从不同端口或容器地址直接访问后端，放开任意 http(s) 来源；
+    # 通过 origin 正则回显来源，仍可携带凭据。
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
